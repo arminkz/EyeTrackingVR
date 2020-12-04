@@ -40,7 +40,7 @@ while True:
 
     # Detect face
     rects = detector(gray, 1)
-    gray = do_frst(gray, 20, 10, 2, 3)
+   # gray = do_frst(gray, 20, 10, 2, 3)   tried to add fsrd to main image but it will have errors regarding image type
     # print image
     cv2.imshow("webcam", gray)
 

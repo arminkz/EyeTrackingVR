@@ -67,12 +67,13 @@ def do_frst(image, radius, kn, alpha, ksize = 3):
     sn = get_sn(ori_img, mag_img, radius, kn, alpha)
 
     return sn
-# camera = cv2.VideoCapture(0)
-# for i in range(1):
-#     return_value, image = camera.read()
-#     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-#     cv2.imshow('d',gray)
-#     out = do_frst(gray,20,10,2, 3)
-#     cv2.imshow('frsd', out)
-#     cv2.waitKey()
-#     cv2.imwrite('opencv'+str(i)+'.png', image)
+#captures one image from webcam and shows points of FSRD with white color
+camera = cv2.VideoCapture(0)
+for i in range(1):
+    return_value, image = camera.read()
+    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+    cv2.imshow('d',gray)
+    out = do_frst(gray,20,10,2, 3)
+    cv2.imshow('frsd', out)
+    cv2.waitKey()
+    cv2.imwrite('opencv'+str(i)+'.png', image)
