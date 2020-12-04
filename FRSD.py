@@ -1,95 +1,78 @@
-
-import cv2
+from scipy.ndimage import gaussian_filter
 import numpy as np
+from scipy.signal import convolve
+import cv2
 
-def gradx(img):
-  img = img.astype('int')
+# Get orientation projection image
+def get_proj_img(image, radius):
 
-  rows, cols = img.shape
-  # Use hstack to add back in the columns that were dropped as zeros
-  return np.hstack( (np.zeros((rows, 1)), (img[:, 2:] - img[:, :-2])/2.0, np.zeros((rows, 1))) )
+    workingDims = tuple((e + 2*radius) for e in image.shape)
 
-def grady(img):
-    img = img.astype('int')
-    rows, cols = img.shape
-    # Use vstack to add back the rows that were dropped as zeros
-    return np.vstack( (np.zeros((1, cols)), (img[2:, :] - img[:-2, :])/2.0, np.zeros((1, cols))) )
+    h,w = image.shape
 
-#Performs fast radial symmetry transform
-#img: input image, grayscale
-#radii: integer value for radius size in pixels (n in the original paper); also used to size gaussian kernel
-#alpha: Strictness of symmetry transform (higher=more strict; 2 is good place to start)
-#beta: gradient threshold parameter, float in [0,1]
-#stdFactor: Standard deviation factor for gaussian kernel
-#mode: BRIGHT, DARK, or BOTH
-def frst(img, radii, alpha, beta, stdFactor, mode='BOTH'):
-  mode = mode.upper()
-  assert mode in ['BRIGHT', 'DARK', 'BOTH']
-  dark = (mode == 'DARK' or mode == 'BOTH')
-  bright = (mode == 'BRIGHT' or mode == 'BOTH')
+    ori_img = np.zeros(workingDims) # Orientation Projection Image
+    mag_img = np.zeros(workingDims) # Magnitutde Projection Image
 
-  workingDims = tuple((e + 2*radii) for e in img.shape)
+    # Kenels for the sobel operator
+    a1 = np.matrix([1, 2, 1])
+    a2 = np.matrix([-1, 0, 1])
+    Kx = a1.T * a2
+    Ky = a2.T * a1
 
-  #Set up output and M and O working matrices
-  output = np.zeros(img.shape, np.uint8)
-  O_n = np.zeros(workingDims, np.int16)
-  M_n = np.zeros(workingDims, np.int16)
+    # Apply the Sobel operator
+    sobel_x = convolve(image, Kx)
+    sobel_y = convolve(image, Ky)
+    sobel_norms = np.hypot(sobel_x, sobel_y)
 
-  #Calculate gradients
-  gx = gradx(img)
-  gy = grady(img)
+    # Distances to afpx, afpy (affected pixels)
+    dist_afpx = np.multiply(np.divide(sobel_x, sobel_norms, out = np.zeros(sobel_x.shape), where = sobel_norms!=0), radius)
+    dist_afpx = np.round(dist_afpx).astype(int)
 
-  #Find gradient vector magnitude
-  gnorms = np.sqrt( np.add( np.multiply(gx, gx) , np.multiply(gy, gy) ) )
+    dist_afpy = np.multiply(np.divide(sobel_y, sobel_norms, out = np.zeros(sobel_y.shape), where = sobel_norms!=0), radius)
+    dist_afpy = np.round(dist_afpy).astype(int)
 
-  #Use beta to set threshold - speeds up transform significantly
-  gthresh = np.amax(gnorms)*beta
 
-  #Find x/y distance to affected pixels
-  gpx = np.multiply(np.divide(gx, gnorms, out=np.zeros(gx.shape), where=gnorms!=0), radii).round().astype(int);
-  gpy = np.multiply(np.divide(gy, gnorms, out=np.zeros(gy.shape), where=gnorms!=0), radii).round().astype(int);
+    for cords, sobel_norm in np.ndenumerate(sobel_norms):
+        i, j = cords
 
-  #Iterate over all pixels (w/ gradient above threshold)
-  for coords, gnorm in np.ndenumerate(gnorms):
-    if gnorm > gthresh:
-      i, j = coords
-      #Positively affected pixel
-      if bright:
-        ppve = (i+gpx[i,j], j+gpy[i,j])
-        O_n[ppve] += 1
-        M_n[ppve] += gnorm
-      #Negatively affected pixel
-      if dark:
-        pnve = (i-gpx[i,j], j-gpy[i,j])
-        O_n[pnve] -= 1
-        M_n[pnve] -= gnorm
+        pos_aff_pix = (i+dist_afpx[i,j], j+dist_afpy[i,j])
+        neg_aff_pix = (i-dist_afpx[i,j], j-dist_afpy[i,j])
 
-  #Abs and normalize O matrix
-  O_n = np.abs(O_n)
-  O_n = O_n / float(np.amax(O_n))
+        ori_img[pos_aff_pix] += 1
+        ori_img[neg_aff_pix] -= 1
+        mag_img[pos_aff_pix] += sobel_norm
+        mag_img[neg_aff_pix] -= sobel_norm
 
-  #Normalize M matrix
-  M_max = float(np.amax(np.abs(M_n)))
-  M_n = M_n / M_max
+    ori_img = ori_img[:h, :w]
+    mag_img = mag_img[:h, :w]
 
-  #Elementwise multiplication
-  F_n = np.multiply(np.power(O_n, alpha), M_n)
+    print ("Did it go back to the original image size? ")
+    print (ori_img.shape == image.shape)
 
-  #Gaussian blur
-  kSize = int( np.ceil( radii / 2 ) )
-  kSize = kSize + 1 if kSize % 2 == 0 else kSize
+    # try normalizing ori and mag img
+    return ori_img, mag_img
 
-  S = cv2.GaussianBlur(F_n, (kSize, kSize), int( radii * stdFactor ))
-  cv2.imshow('Grey',S)
-  cv2.waitKey(0)
-  print(S)
-  return S
+def get_sn(ori_img, mag_img, radius, kn, alpha):
 
-camera = cv2.VideoCapture(0)
-for i in range(1):
-    return_value, image = camera.read()
-    gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    cv2.imshow('d',gray)
-    frst(gray,12,2,0.1, 0.2,mode='BOTH')
-    cv2.imwrite('opencv'+str(i)+'.png', image)
-del(camera)
+    ori_img_limited = np.minimum(ori_img, kn)
+    fn = np.multiply(np.divide(mag_img,kn), np.power((np.absolute(ori_img_limited)/kn), alpha))
+
+    # convolute fn with gaussian filter.
+    sn = gaussian_filter(fn, 0.25*radius)
+
+    return sn
+
+def do_frst(image, radius, kn, alpha, ksize = 3):
+    ori_img, mag_img = get_proj_img(image, radius)
+    sn = get_sn(ori_img, mag_img, radius, kn, alpha)
+
+    return sn
+# camera = cv2.VideoCapture(0)
+# for i in range(1):
+#     return_value, image = camera.read()
+#     gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
+#     cv2.imshow('d',gray)
+#     out = do_frst(gray,20,10,2, 3)
+#     cv2.imshow('frsd', out)
+#     cv2.waitKey()
+#     cv2.imwrite('opencv'+str(i)+'.png', image)

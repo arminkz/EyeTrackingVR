@@ -1,9 +1,11 @@
+from FRSD import do_frst
 import cv2
 import numpy as np
 import dlib
 import sys
 import argparse
 import imutils
+
 from imutils import face_utils
 
 # initialize dlib's face detector (HOG-based) and then create
@@ -30,6 +32,7 @@ while True:
     ret, image = cap.read()
 
     # Resize the image
+
     image = imutils.resize(image, width=500)
 
     # Convert to grayscale
@@ -37,7 +40,7 @@ while True:
 
     # Detect face
     rects = detector(gray, 1)
-
+    gray = do_frst(gray, 20, 10, 2, 3)
     # print image
     cv2.imshow("webcam", gray)
 
@@ -51,8 +54,8 @@ while True:
         (ri, rj) = face_utils.FACIAL_LANDMARKS_IDXS['right_eye']
         (li, lj) = face_utils.FACIAL_LANDMARKS_IDXS['left_eye']
 
-        cv2.imshow("right eye", extract_roi(image, shape, ri, rj))
-        cv2.imshow("left eye", extract_roi(image, shape, li, lj))
+        cv2.imshow("right eye", (extract_roi(image, shape, ri, rj)))
+        cv2.imshow("left eye", (extract_roi(image, shape, li, lj)))
 
         if cv2.waitKey(1) & 0xFF == ord('q'):
             # When everything done, release the capture
